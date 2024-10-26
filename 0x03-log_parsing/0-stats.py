@@ -1,62 +1,50 @@
 #!/usr/bin/python3
+"""
+Log parsing
+"""
+
 import sys
-import signal
 
-# Initialize variables
-total_size = 0
-status_counts = {}
-line_count = 0
-valid_status_codes = [200, 301, 400, 401, 403, 404, 405, 500]
+if __name__ == '__main__':
+    # Initialize variables
+    filesize = 0
+    count = 0
+    codes = ["200", "301", "400", "401", "403", "404", "405", "500"]
+    stats = {code: 0 for code in codes}
 
-# Function to print statistics
-def print_stats():
-    print(f"File size: {total_size}")
-    for code in sorted(status_counts.keys()):
-        if status_counts[code] > 0:
-            print(f"{code}: {status_counts[code]}")
+    def print_stats(stats: dict, file_size: int) -> None:
+        """Print statistics in the required format."""
+        print("File size: {}".format(file_size))
+        for code in sorted(stats):
+            if stats[code] > 0:
+                print("{}: {}".format(code, stats[code]))
 
-# Signal handler for keyboard interruption (CTRL + C)
-def signal_handler(sig, frame):
-    print_stats()
-    sys.exit(0)
+    try:
+        for line in sys.stdin:
+            count += 1
+            data = line.split()
+            try:
+                # Extract status code and update its count
+                status_code = data[-2]
+                if status_code in stats:
+                    stats[status_code] += 1
+            except IndexError:
+                continue  # Ignore lines that don't have enough data
 
-# Set up signal handler
-signal.signal(signal.SIGINT, signal_handler)
+            try:
+                # Update total file size
+                filesize += int(data[-1])
+            except (IndexError, ValueError):
+                continue  # Ignore lines where file size is not an integer
 
-# Read stdin line by line
-try:
-    for line in sys.stdin:
-        parts = line.split()
+            # Print stats every 10 lines
+            if count % 10 == 0:
+                print_stats(stats, filesize)
 
-        # Validate format
-        if len(parts) < 7 or not parts[5].startswith('"GET') or not parts[6].startswith('/projects/260'):
-            continue
+        # Final stats output
+        print_stats(stats, filesize)
 
-        try:
-            # Extract status code and file size
-            status_code = int(parts[-2])
-            file_size = int(parts[-1])
-
-            # Update total size and status count
-            total_size += file_size
-
-            if status_code in valid_status_codes:
-                if status_code not in status_counts:
-                    status_counts[status_code] = 0
-                status_counts[status_code] += 1
-
-            line_count += 1
-
-            # Print stats after every 10 lines
-            if line_count % 10 == 0:
-                print_stats()
-
-        except (ValueError, IndexError):
-            # Skip lines that don't match the expected format
-            continue
-
-# Handle keyboard interruption
-except KeyboardInterrupt:
-    print_stats()
-    sys.exit(0)
-
+    except KeyboardInterrupt:
+        # Handle keyboard interruption gracefully
+        print_stats(stats, filesize)
+        raise
